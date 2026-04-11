@@ -78,12 +78,18 @@ class ChessBoard:
 
         # Checks if the move is valid
         if new_position in piece.valid_moves(self):
-            self.capture_piece(new_position, piece)
+            if not self.is_empty(new_position):
+                self.capture_piece(new_position, piece)
 
             # Empty old position to replace it with new position
             self.board[old_row][old_col] = None
             self.board[new_row][new_col] = piece
             piece.position = new_position
+
+            if isinstance(piece, Pawn):
+                last_row = 7 if piece.color == 'white' else 0
+                if new_row == last_row:
+                    self.promote_pawn(piece)
         else:
             raise ValueError("Invalid move for this piece.")
 
