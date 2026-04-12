@@ -34,7 +34,7 @@ class Square:
             str: The algebraic notation of the square.
         """
         letters = "ABCDEFGH"
-        return f"{letters[self.col]}{8 - self.row}"
+        return f"{letters[self.col]}{0 + self.row}"
 
     def is_occupied(self) -> bool:
         """
@@ -53,6 +53,7 @@ class Square:
             piece (Piece): The chess piece to place on the square.
         """
         self.piece = piece
+        piece.square = self
 
     def remove_piece(self) -> None:
         """

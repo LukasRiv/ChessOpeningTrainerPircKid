@@ -1,17 +1,25 @@
 from src.board import ChessBoard
-from src.pieces import Rook, Pawn
+from src.pieces import Rook, Pawn, Bishop
+
 
 def test_rook_moves():
     board = ChessBoard()
 
     # Place rooks and a pawn on the board
     square_white_rook = board.squares[0][0]
+    square_white_bishop = board.squares[6][2]
     square_black_rook = board.squares[5][3]
     square_black_pawn = board.squares[7][3]
 
     white_rook = Rook('white', square_white_rook)
+    white_bishop = Bishop('white', square_white_bishop)
     black_rook = Rook('black', square_black_rook)
     black_pawn = Pawn('black', square_black_pawn)
+
+    white_rook.update_valid_moves(board)
+    white_bishop.update_valid_moves(board)
+    black_rook.update_valid_moves(board)
+    black_pawn.update_valid_moves(board)
 
     success = True
 
@@ -40,6 +48,19 @@ def test_rook_moves():
     except ValueError as e:
         success = False
         print(f"Error moving black rook: {e}")
+
+        # Test valid rook move (black)
+        try:
+            target_square_black = board.squares[5][1]
+            board.move_piece(black_rook, target_square_black)
+            if target_square_black.piece != black_rook:
+                success = False
+                print("Black rook was not moved correctly.")
+            else:
+                print("Black rook was moved correctly.")
+        except ValueError as e:
+            success = False
+            print(f"Error moving black rook: {e}")
 
     # Test capture by black rook
     try:

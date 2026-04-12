@@ -18,7 +18,7 @@ class Pawn(Piece):
         self.start_row = 1 if self.color == 'white' else 6
         self.is_en_passant_capture = False
 
-    def valid_moves(self, board: 'ChessBoard') -> List['Square']:
+    def _calculate_valid_moves(self, board: 'ChessBoard') -> List['Square']:
         """
         Calculate all valid moves for a pawn, including captures and promotion.
 

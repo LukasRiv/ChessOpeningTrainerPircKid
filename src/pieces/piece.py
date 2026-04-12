@@ -19,17 +19,31 @@ class Piece(ABC):
         """
         self.color = color
         self.square = square
-        self.square.place_piece(self)  # Place la pièce sur la case dès l'initialisation
-        self.directions: Optional[List[Tuple[int, int]]] = None
-        self.moves: Optional[List[Tuple[int, int]]] = None
+        self.square.place_piece(self)  # Place piece on square on init
+        self._valid_moves: List['Square'] = []
+
 
     @property
-    def position(self) -> Tuple[int, int]:
-        """Returns the (row, column) position of the piece."""
-        return (self.square.row, self.square.col)
+    def position(self) -> 'Square':
+        """Returns the Square object where the piece is placed."""
+        return self.square
+
+    @property
+    def valid_moves(self) -> List['Square']:
+        """Returns the list of valid moves for this piece."""
+        return self._valid_moves
+
+    def update_valid_moves(self, board: 'ChessBoard') -> None:
+        """
+        Updates the list of valid moves for this piece based on the current board state.
+
+        Args:
+            board (ChessBoard): The chess board.
+        """
+        self._valid_moves = self._calculate_valid_moves(board)
 
 
-    def valid_moves(self, board: 'ChessBoard') -> List['Square']:
+    def _calculate_valid_moves(self, board: 'ChessBoard') -> List['Square']:
         """
         Calculate all valid moves for the piece using its attributes.
 
@@ -42,8 +56,12 @@ class Piece(ABC):
         move_list = []
         current_row, current_col = self.square.row, self.square.col
 
-        if self.directions:
-            for d_row, d_col in self.directions:
+        # Use class attributes : directions/moves
+        directions = getattr(self.__class__, 'directions', None)
+        moves = getattr(self.__class__, 'moves', None)
+
+        if directions:
+            for d_row, d_col in directions:
                 for step in range(1, 8):
                     new_row, new_col = current_row + step * d_row, current_col + step * d_col
                     if 0 <= new_row < 8 and 0 <= new_col < 8:
@@ -56,8 +74,8 @@ class Piece(ABC):
                             break
                     else:
                         break
-        elif self.moves:
-            for d_row, d_col in self.moves:
+        elif moves:
+            for d_row, d_col in moves:
                 new_row, new_col = current_row + d_row, current_col + d_col
                 if 0 <= new_row < 8 and 0 <= new_col < 8:
                     target_square = board.squares[new_row][new_col]

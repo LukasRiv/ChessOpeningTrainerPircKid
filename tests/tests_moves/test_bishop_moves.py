@@ -13,6 +13,10 @@ def test_bishop_moves():
     black_bishop = Bishop('black', square_black_bishop)
     black_pawn = Pawn('black', square_black_pawn)
 
+    white_bishop.update_valid_moves(board)
+    black_bishop.update_valid_moves(board)
+    black_pawn.update_valid_moves(board)
+
     success = True
 
     # Test valid bishop move (white)
