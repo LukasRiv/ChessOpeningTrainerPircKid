@@ -1,9 +1,12 @@
-from src.pieces.piece import Piece
-from typing import Tuple
+from src.pieces import Piece
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.board.square import Square
 
 class King(Piece):
-    def __init__(self, color: str, position: Tuple[int, int]) -> None:
-        super().__init__(color, position)
+    def __init__(self, color: str, square: 'Square') -> None:
+        super().__init__(color, square)
         self.moves = [
             (1, 0), (-1, 0), (0, 1), (0, -1),
             (1, 1), (1, -1), (-1, 1), (-1, -1)

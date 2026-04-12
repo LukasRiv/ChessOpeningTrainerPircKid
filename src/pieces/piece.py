@@ -1,28 +1,35 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Tuple, List, Optional
 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.chessboard import ChessBoard
+    from src.board.chessboard import ChessBoard
+    from src.board.square import Square
 
 
 class Piece(ABC):
-    def __init__(self, color: str, position: Tuple[int, int]) -> None:
+    def __init__(self, color: str, square: 'Square') -> None:
         """
         Initializes a Piece object.
 
         Args:
             color (str): The color of the piece (white or black).
-            position (Tuple[row, column]): Represents the position of the piece on the board.
+            square (Square): The square on which the piece is placed.
         """
         self.color = color
-        self.position = position
+        self.square = square
+        self.square.place_piece(self)  # Place la pièce sur la case dès l'initialisation
         self.directions: Optional[List[Tuple[int, int]]] = None
         self.moves: Optional[List[Tuple[int, int]]] = None
 
+    @property
+    def position(self) -> Tuple[int, int]:
+        """Returns the (row, column) position of the piece."""
+        return (self.square.row, self.square.col)
 
-    def valid_moves(self, board: 'ChessBoard') -> List[Tuple[int, int]]:
+
+    def valid_moves(self, board: 'ChessBoard') -> List['Square']:
         """
         Calculate all valid moves for the piece using its attributes.
 
@@ -33,28 +40,29 @@ class Piece(ABC):
             List of valid positions (row, column) where the piece can move.
         """
         move_list = []
+        current_row, current_col = self.square.row, self.square.col
 
         if self.directions:
             for d_row, d_col in self.directions:
                 for step in range(1, 8):
-                    new_row, new_col = self.position[0] + step * d_row, self.position[1] + step * d_col
+                    new_row, new_col = current_row + step * d_row, current_col + step * d_col
                     if 0 <= new_row < 8 and 0 <= new_col < 8:
-                        if board.is_empty((new_row, new_col)):
-                            move_list.append((new_row, new_col))
+                        target_square = board.squares[new_row][new_col]
+                        if board.is_empty(target_square):
+                            move_list.append(target_square)
                         else:
-                            target_piece = board.get_piece((new_row, new_col))
-                            if target_piece.color != self.color:
-                                move_list.append((new_row, new_col))
+                            if target_square.piece and target_square.piece.color != self.color:
+                                move_list.append(target_square)
                             break
                     else:
                         break
         elif self.moves:
             for d_row, d_col in self.moves:
-                new_row, new_col = self.position[0] + d_row, self.position[1] + d_col
+                new_row, new_col = current_row + d_row, current_col + d_col
                 if 0 <= new_row < 8 and 0 <= new_col < 8:
-                    target_piece = board.get_piece((new_row, new_col))
-                    if target_piece is None or target_piece.color != self.color:
-                        move_list.append((new_row, new_col))
+                    target_square = board.squares[new_row][new_col]
+                    if board.is_empty(target_square) or (target_square.piece and target_square.piece.color != self.color):
+                        move_list.append(target_square)
 
         return move_list
 

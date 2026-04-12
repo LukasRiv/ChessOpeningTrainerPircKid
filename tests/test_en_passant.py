@@ -1,5 +1,5 @@
-from src.chessboard import ChessBoard
-from src.pieces.pawn import Pawn
+from src.board.chessboard import ChessBoard
+from src.pieces import Pawn
 
 def test_en_passant():
     # Initialiser l'échiquier
