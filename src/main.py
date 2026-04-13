@@ -2,6 +2,7 @@ from src.board import Square, ChessBoard
 from src.pieces import Piece, Pawn, Rook, Bishop, Knight, Queen, King
 
 def main():
+    """
     board = ChessBoard()
 
     # Récupère les objets Square pour les positions initiales
@@ -23,6 +24,7 @@ def main():
         board.display()
     except ValueError as e:
         print(f"\nError: {e}")
+    """
 
 if __name__ == "__main__":
     main()
