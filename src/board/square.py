@@ -34,7 +34,7 @@ class Square:
             str: The algebraic notation of the square.
         """
         letters = "ABCDEFGH"
-        return f"{letters[self.col]}{0 + self.row}"
+        return f"{letters[self.col]}{1 + self.row}"
 
     def is_occupied(self) -> bool:
         """
