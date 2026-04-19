@@ -1,0 +1,7 @@
+[project]
+name = "ChessOpeningTrainerPircKid"
+version = "0.1.0"
+dependencies = [
+    "pygame-ce>=2.5.7",
+    "pyinstaller>=5.0.0",
+]
