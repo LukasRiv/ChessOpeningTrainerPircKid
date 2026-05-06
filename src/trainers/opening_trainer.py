@@ -1,6 +1,6 @@
 import random
 from typing import List, Dict, Optional, Tuple
-from pgn_parser import PGNParser
+from trainers.pgn_parser import PGNParser
 
 class OpeningTrainer:
     """Manages the training session for chess openings, including bot moves, player validation, and nested variations."""
@@ -24,7 +24,7 @@ class OpeningTrainer:
 
     def load_opening(self, pgn_file_path: str) -> None:
         """
-        Loads an opening from a PGN file and initializes the trainer.
+        Loads an opening from a PGN file and initializes the trainers.
 
         Args:
             pgn_file_path (str): Path to the PGN file.
@@ -35,7 +35,7 @@ class OpeningTrainer:
         self.reset()
 
     def reset(self) -> None:
-        """Resets the trainer to the initial state (main line)."""
+        """Resets the trainers to the initial state (main line)."""
         self.current_line = self.main_line.copy()
         self.current_moves = []
         self.current_index = 0
@@ -191,9 +191,9 @@ class OpeningTrainer:
 
     def play_bot_move(self, move: Optional[str] = None) -> Tuple[Optional[str], List[str]]:
         """
-        Plays the bot's move (White) and updates the trainer state.
+        Plays the bot's move (White) and updates the trainers state.
         If no move is provided, the bot randomly chooses among available White moves.
-        If a move matches a direct sub-variation start, the trainer switches to it.
+        If a move matches a direct sub-variation start, the trainers switches to it.
         If the current line is exhausted, returns (None, []).
 
         Args:
@@ -292,10 +292,10 @@ class OpeningTrainer:
 
     def play_player_move(self, move: str) -> bool:
         """
-        Plays the player's move (Black) and updates the trainer state.
+        Plays the player's move (Black) and updates the trainers state.
         If the move is the last in the current line, the game ends.
-        If the move starts a direct sub-variation of the current variation, the trainer switches to it.
-        Otherwise, the trainer continues in the current line.
+        If the move starts a direct sub-variation of the current variation, the trainers switches to it.
+        Otherwise, the trainers continues in the current line.
 
         Args:
             move (str): The move played by the player.
@@ -371,7 +371,7 @@ class OpeningTrainer:
 
     def get_current_state(self) -> Dict:
         """
-        Returns the current state of the trainer.
+        Returns the current state of the trainers.
 
         Returns:
             Dict: Dictionary with current_line, current_moves, current_index, and global_start_index.

@@ -1,6 +1,6 @@
 import sys
 import os
-from ui.chess_ui_pygame import ChessUI
+from ui.old_chess_ui_pygame import ChessUI
 from board.chessboard import ChessBoard
 
 def main():

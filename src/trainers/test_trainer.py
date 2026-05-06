@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional
 from pgn_parser import PGNParser
-from opening_trainer import OpeningTrainer
+from trainers import OpeningTrainer
 
 def find_variation_by_path(variations: List[Dict], path: str) -> Optional[Dict]:
     """
