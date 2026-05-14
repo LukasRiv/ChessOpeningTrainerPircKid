@@ -427,20 +427,20 @@ class ChessBoard:
         return True
 
     def is_checkmate(self, color: str) -> bool:
-        """Check if the player of the given color is in checkmate.
-
-        Args:
-            color (str): The color of the player to check ('white' or 'black').
-
-        Returns:
-            bool: True if the player is in checkmate, False otherwise.
-        """
+        """Check if the player of the given color is in checkmate."""
         if not self.is_check or self.check_color != color:
             return False
 
         king_square = self.white_king_square if color == 'white' else self.black_king_square
         if king_square is None:
             return False
+
+        # Update valid moves for all pieces of the current player
+        for row in range(8):
+            for col in range(8):
+                piece = self.squares[row][col].piece
+                if piece and piece.color == color:
+                    piece.update_valid_moves(self)
 
         # Save the current board state
         saved_state = self._save_board_state()
@@ -450,7 +450,7 @@ class ChessBoard:
             for col in range(8):
                 piece = self.squares[row][col].piece
                 if piece is not None and piece.color == color:
-                    for move in piece.valid_moves.copy():
+                    for move in piece.valid_moves:
                         # Simulate the move
                         old_square = piece.square
                         old_piece = move.piece

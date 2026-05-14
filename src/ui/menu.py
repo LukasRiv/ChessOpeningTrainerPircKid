@@ -6,6 +6,7 @@ from src.ui.constants import (
     DROPDOWN_BUTTON_HEIGHT, DROPDOWN_SPACING
 )
 from src.ui.button import Button
+pygame.event.set_allowed([pygame.DROPFILE])
 
 class MenuManager:
     """Manages the hierarchical menu for the chess UI.
@@ -39,6 +40,7 @@ class MenuManager:
         self.current_menu_path = []
         self.chess_ui = chess_ui
         self.pgn_dropdown_open = False  # Track if PGN dropdown is open
+        self.upload_ui_open = False # Track if Upload dropdown is open
 
         self._create_buttons_recursive(MENU_TREE)
         self._update_button_visibility()
@@ -160,6 +162,8 @@ class MenuManager:
             if self.current_menu_path:
                 self.current_menu_path.pop()  # Go back to parent menu
                 self.pgn_dropdown_open = False  # Close PGN dropdown
+                self.upload_ui_open = False
+                self.chess_ui.upload_ui.hide()
                 self._update_button_visibility()
             return
 
@@ -188,11 +192,31 @@ class MenuManager:
         if button.children is not None:
             self.current_menu_path.append(button_name)
             self.pgn_dropdown_open = False  # Close PGN dropdown when navigating
+            self.upload_ui_open = False
             self._update_button_visibility()
             return
 
         # Execute actions for leaf buttons (no children)
         self._execute_button_action(button_name)
+
+    def handle_event(self, event: pygame.event) -> bool:
+        """Handle Pygame events related to the menu (including drag & drop).
+
+        Args:
+            event (pygame.event): The event to handle.
+
+        Returns:
+            bool: True if the event was handled by the menu, False otherwise.
+        """
+        if event.type == pygame.DROPFILE:
+            self._handle_file_drop(event.file)
+            return True
+        return False
+
+    def _handle_file_drop(self, file_path: str) -> None:
+        """Handle a file dropped onto the window."""
+        if self.upload_ui_open and self.chess_ui.upload_ui.visible:
+            self.chess_ui.upload_ui.handle_file_drop(file_path)
 
     def _execute_button_action(self, button_name: str) -> None:
         """Execute the action for a leaf button, including loading PGN files.
@@ -202,6 +226,12 @@ class MenuManager:
         """
         if button_name.endswith(".pgn"):
             self._load_specific_opening(button_name)
+            return
+
+        # Handle Upload button
+        if button_name == "Upload":
+            self.show_upload_ui()
+            return
 
         # Map of button names to their corresponding actions
         actions = {
@@ -209,11 +239,7 @@ class MenuManager:
             "Random Opening": self._load_random_opening,
             "Home-Made AI": lambda: self._show_not_implemented("Home-Made AI"),
             "Stockfish": lambda: self._show_not_implemented("Stockfish"),
-            "Import ScreenShot": lambda: self._show_not_implemented("Import ScreenShot"),
-            "Import PGN": lambda: self._show_not_implemented("Import PGN"),
-            "Import FEN": lambda: self._show_not_implemented("Import FEN"),
             "Game VS Bot": lambda: self._show_not_implemented("Game VS Bot"),
-            "Analysis": lambda: self._show_not_implemented("Analysis"),
             "Flip Board": self._flip_board,
         }
 
@@ -264,6 +290,32 @@ class MenuManager:
     def _flip_board(self) -> None:
         """Flip the board orientation."""
         self.chess_ui.board_flipped = not self.chess_ui.board_flipped
+
+    def show_upload_ui(self) -> None:
+        """Toggle the upload UI visibility (show/hide).
+
+        This works the same way as the PGN dropdown toggle.
+        """
+        # Toggle the Upload UI state
+        self.upload_ui_open = not self.upload_ui_open
+
+        # Calculate Y position BELOW the Upload button
+        upload_button = self.buttons.get("Upload")
+        if upload_button:
+            y_position = upload_button.rect.bottom + 20  # Below the button
+        else:
+            y_position = MENU_BUTTON_START_Y + self.button_height + 20
+
+        if self.upload_ui_open:
+            self.chess_ui.upload_ui.show(y_position)
+        else:
+            self.chess_ui.upload_ui.hide()
+
+        # Update menu to show only Analysis > Upload path
+
+        self.pgn_dropdown_open = False
+        self._update_button_visibility()
+
 
     def _show_not_implemented(self, button_name: str) -> None:
         """Show a 'not implemented' error message.

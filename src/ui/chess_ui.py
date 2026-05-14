@@ -1,5 +1,3 @@
-"""Pygame-based UI for the chess application."""
-
 import os
 import pygame
 import sys
@@ -10,10 +8,13 @@ from src.ui.constants import (
     PROMOTION_WINDOW_SIZE, PROMOTION_PIECE_SIZE, FPS, PROMOTION_PIECES,
     DRAG_MOVE_THRESHOLD, LIGHT_SQUARE, DARK_SQUARE, HIGHLIGHT, SELECTED,
     CAPTURE, BLACK, WHITE, SIDEBAR_BG, MENU_BUTTON_X, MENU_BUTTON_START_Y,
-    FLIP_BUTTON_SIZE, FLIP_BUTTON_X, FLIP_BUTTON_Y, FLIP_BUTTON_ICON_PATH, MENU_BUTTON_WIDTH
+    FLIP_BUTTON_SIZE, FLIP_BUTTON_X, FLIP_BUTTON_Y, FLIP_BUTTON_ICON_PATH,
+    MENU_BUTTON_WIDTH, BACKGROUND_COLOR, BOARD_DRAW_SIZE, SQUARE_DRAW_SIZE,
+    BOARD_DRAW_X, BOARD_DRAW_Y
 )
 from src.ui.button import Button
 from src.ui.menu import MenuManager
+from src.ui.upload_ui import UploadUI
 from src.ui.opening_trainer_ui import OpeningTrainerUI
 
 class ChessUI:
@@ -38,6 +39,7 @@ class ChessUI:
         dragging (bool): Indicates if a piece is being dragged.
         drag_start_pos (tuple | None): Starting position of the drag.
         drag_current_pos (tuple | None): Current position of the drag.
+        piece_already_selected (bool): Indicates if a piece is already selected (to handle 2nd click).
         screen (pygame.Surface): The Pygame display surface.
         piece_images (dict): Dictionary of piece images.
         promotion_piece_images (dict): Dictionary of promotion piece images.
@@ -63,6 +65,7 @@ class ChessUI:
         self.interaction_enabled = False
         self.board_flipped = False
         self.current_opening_name = None
+        self.piece_already_selected = False  # Track if a piece is already selected for 2nd click
 
         # Variables for king in check blink effect
         self.king_in_check_blink = False
@@ -79,12 +82,26 @@ class ChessUI:
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         pygame.display.set_caption("Chess Opening Trainer - Pirc/KID")
 
-        # Create Window data
+        # Store window dimensions
         self.WINDOW_WIDTH = WINDOW_WIDTH
         self.WINDOW_HEIGHT = WINDOW_HEIGHT
         self.BOARD_SIZE = BOARD_SIZE
         self.SQUARE_SIZE = SQUARE_SIZE
         self.SIDEBAR_WIDTH = SIDEBAR_WIDTH
+
+        # Store drawing dimensions
+        self.BOARD_DRAW_SIZE = BOARD_DRAW_SIZE
+        self.SQUARE_DRAW_SIZE = SQUARE_DRAW_SIZE
+        self.BOARD_DRAW_X = BOARD_DRAW_X
+        self.BOARD_DRAW_Y = BOARD_DRAW_Y
+
+        # Calculate board position to center it in the free space (left of sidebar)
+        self.board_x = (self.WINDOW_WIDTH - self.SIDEBAR_WIDTH - self.BOARD_SIZE) // 2
+        self.board_y = (self.WINDOW_HEIGHT - self.BOARD_SIZE) // 2
+
+        # Load board background image
+        self.board_image = None
+        self._load_board_image()
 
         # Load piece images (scaled to SQUARE_SIZE)
         self.piece_images = {}
@@ -97,7 +114,7 @@ class ChessUI:
         # Transparent surface for highlights
         self.highlight_surface = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
 
-        # Initialize MenuManager
+        # Initialize UI managers
         self.menu_manager = MenuManager(
             button_width=MENU_BUTTON_WIDTH,
             button_height=40,
@@ -105,20 +122,20 @@ class ChessUI:
             button_spacing=70,
             chess_ui=self
         )
-
-        # Initialize Opening Trainer UI
         self.opening_trainer_ui = OpeningTrainerUI(self)
+        self.upload_ui = UploadUI(self)
 
-        # Flip Board
+        # Flip Board button
         self.flip_board_button = Button(
             x=FLIP_BUTTON_X,
             y=FLIP_BUTTON_Y,
             width=FLIP_BUTTON_SIZE,
             height=FLIP_BUTTON_SIZE,
-            icon_image_path=FLIP_BUTTON_ICON_PATH)
+            icon_image_path=FLIP_BUTTON_ICON_PATH
+        )
 
     def _get_board_coords(self, x: int, y: int) -> tuple[int, int]:
-        """Convert screen coordinates (x, y) to board (row, col), accounting for flip.
+        """Convert screen coordinates (x, y) to board (row, col), accounting for flip, board position, and drawing offset.
 
         Args:
             x (int): Screen x-coordinate (0 to WINDOW_WIDTH).
@@ -127,8 +144,13 @@ class ChessUI:
         Returns:
             tuple[int, int]: (row, col) in the board's internal coordinate system.
         """
-        col = x // SQUARE_SIZE
-        row = y // SQUARE_SIZE
+        # Adjust for board position and drawing offset
+        board_relative_x = x - self.board_x - self.BOARD_DRAW_X
+        board_relative_y = y - self.board_y - self.BOARD_DRAW_Y
+
+        # Convert to board coordinates using the drawn square size
+        col = board_relative_x // self.SQUARE_DRAW_SIZE
+        row = board_relative_y // self.SQUARE_DRAW_SIZE
 
         if self.board_flipped:
             return row, 7 - col
@@ -136,7 +158,7 @@ class ChessUI:
             return 7 - row, col
 
     def _get_screen_coords(self, row: int, col: int) -> tuple[int, int]:
-        """Convert board (row, col) to screen coordinates (x, y), accounting for flip.
+        """Convert board (row, col) to screen coordinates (x, y), accounting for flip and board centering.
 
         Args:
             row (int): Board row (0 to 7).
@@ -146,14 +168,30 @@ class ChessUI:
             tuple[int, int]: (x, y) screen coordinates.
         """
         if self.board_flipped:
-            return (7 - col) * SQUARE_SIZE, row * SQUARE_SIZE
+            x = (7 - col) * self.SQUARE_DRAW_SIZE + self.board_x + self.BOARD_DRAW_X
+            y = row * self.SQUARE_DRAW_SIZE + self.board_y + self.BOARD_DRAW_Y
         else:
-            return col * SQUARE_SIZE, (7 - row) * SQUARE_SIZE
+            x = col * self.SQUARE_DRAW_SIZE + self.board_x + self.BOARD_DRAW_X
+            y = (7 - row) * self.SQUARE_DRAW_SIZE + self.board_y + self.BOARD_DRAW_Y
+        return x, y
+
+    def _load_board_image(self) -> None:
+        """Load the chessboard background image from assets/board/chessboard.png."""
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(os.path.dirname(script_dir))
+        board_image_path = os.path.join(project_root, "assets", "board", "ChessboardPixel.png")
+        try:
+            self.board_image = pygame.image.load(board_image_path)
+            # Scale the image to match BOARD_SIZE (from constants)
+            self.board_image = pygame.transform.scale(self.board_image, (BOARD_SIZE, BOARD_SIZE))
+        except (FileNotFoundError, pygame.error) as e:
+            print(f"Warning: Could not load board image: {e}. Falling back to default board.")
+            self.board_image = None
 
     def _load_piece_images(self) -> None:
         """Load and scale piece images to match SQUARE_SIZE."""
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(os.path.dirname((script_dir)))
+        project_root = os.path.dirname(os.path.dirname(script_dir))
         pieces_dir = os.path.join(project_root, "assets", "pieces")
 
         piece_types = ["pawn", "rook", "knight", "bishop", "queen", "king"]
@@ -162,7 +200,7 @@ class ChessUI:
                 image_path = os.path.join(pieces_dir, f"{color_prefix}{piece_type}.png")
                 try:
                     img = pygame.image.load(image_path)
-                    img = pygame.transform.scale(img, (SQUARE_SIZE, SQUARE_SIZE))
+                    img = pygame.transform.scale(img, (self.SQUARE_DRAW_SIZE, self.SQUARE_DRAW_SIZE))
                     self.piece_images[f"{color}_{piece_type}"] = img
                 except FileNotFoundError:
                     placeholder = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
@@ -179,15 +217,24 @@ class ChessUI:
 
     def draw_board(self) -> None:
         """Draw the chess board and pieces on the screen, with optional 180° flip."""
-        self.screen.fill(WHITE)
+        self.screen.fill(BACKGROUND_COLOR)
 
-        # Draw squares and pieces
+        # Draw board background (image or default squares) at centered position
+        if self.board_image:
+            self.screen.blit(self.board_image, (self.board_x, self.board_y))
+        else:
+            # Fallback: draw default squares at the same size as the background image
+            for row in range(8):
+                for col in range(8):
+                    x = self.board_x + self.BOARD_DRAW_X + col * self.SQUARE_DRAW_SIZE
+                    y = self.board_y + self.BOARD_DRAW_Y + row * self.SQUARE_DRAW_SIZE
+                    color = DARK_SQUARE if (row + col) % 2 == 0 else LIGHT_SQUARE
+                    pygame.draw.rect(self.screen, color, (x, y, self.SQUARE_DRAW_SIZE, self.SQUARE_DRAW_SIZE))
+
+        # Draw pieces (unchanged logic, but now uses centered coordinates)
         for row in range(8):
             for col in range(8):
                 x, y = self._get_screen_coords(row, col)
-                color = DARK_SQUARE if (row + col) % 2 == 0 else LIGHT_SQUARE
-                pygame.draw.rect(self.screen, color, (x, y, SQUARE_SIZE, SQUARE_SIZE))
-
                 square = self.chessboard.squares[row][col]
                 piece = square.piece
                 if piece:
@@ -196,7 +243,7 @@ class ChessUI:
                     if img_key in self.piece_images:
                         self.screen.blit(self.piece_images[img_key], (x, y))
 
-        # Highlight selected square
+        # Highlight selected square and valid moves (unchanged)
         if self.selected_square:
             x, y = self._get_screen_coords(self.selected_square.row, self.selected_square.col)
             self._draw_highlight(x, y, SELECTED)
@@ -212,16 +259,15 @@ class ChessUI:
                     else:
                         self._draw_highlight(x, y, HIGHLIGHT)
 
-        # Blink king in check
+        # Rest of the method (blink king, dragged piece, promotion window) remains unchanged
         if self.king_in_check_blink:
             king_square = (self.chessboard.white_king_square if self.current_player == "white"
-                          else self.chessboard.black_king_square)
+                           else self.chessboard.black_king_square)
             if king_square:
                 x, y = self._get_screen_coords(king_square.row, king_square.col)
                 if self.blink_counter % self.blink_frequency < self.blink_frequency // 2:
                     self._draw_highlight(x, y, self.blink_color)
 
-        # Draw dragged piece
         if self.dragging and self.selected_square and self.drag_current_pos:
             piece = self.selected_square.piece
             piece_type = piece.__class__.__name__.lower()
@@ -238,8 +284,8 @@ class ChessUI:
             self._draw_promotion_window()
 
     def draw_sidebar(self) -> None:
-        """Draw the sidebar with visible buttons and menu title."""
-        sidebar_rect = pygame.Rect(self.BOARD_SIZE, 0, self.SIDEBAR_WIDTH, self.WINDOW_HEIGHT)
+        """Draw the sidebar with visible buttons and opening info."""
+        sidebar_rect = pygame.Rect(self.WINDOW_WIDTH - self.SIDEBAR_WIDTH, 0, self.SIDEBAR_WIDTH, self.WINDOW_HEIGHT)
         pygame.draw.rect(self.screen, SIDEBAR_BG, sidebar_rect)
 
         self.flip_board_button.draw(self.screen)
@@ -249,23 +295,21 @@ class ChessUI:
             if button.visible:
                 button.draw(self.screen)
 
-        """# Draw menu title
-        font = pygame.font.SysFont("Arial", 24, bold=True)
-        title = font.render("Menu", True, WHITE)
-        self.screen.blit(title, (BOARD_SIZE + 80, 20))"""
+        # Draw Upload UI if visible
+        self.upload_ui.draw(self.screen)
 
         # Display current opening info at the bottom of the menu
         if self.current_opening_name:
             debug_font = pygame.font.SysFont("Arial", 14)
             opening_text = debug_font.render(f"Opening: {self.current_opening_name}", True, WHITE)
-            self.screen.blit(opening_text, (BOARD_SIZE + 20, WINDOW_HEIGHT - 70))
+            self.screen.blit(opening_text, (self.WINDOW_WIDTH - self.SIDEBAR_WIDTH + 20, self.WINDOW_HEIGHT - 70))
 
             if (hasattr(self.opening_trainer_ui, 'opening_trainer') and
-                self.opening_trainer_ui.opening_trainer and
-                self.opening_trainer_ui.opening_trainer.main_line):
+                    self.opening_trainer_ui.opening_trainer and
+                    self.opening_trainer_ui.opening_trainer.main_line):
                 moves = self.opening_trainer_ui.opening_trainer.main_line[:10]
                 moves_text = debug_font.render(f"Moves: {' '.join(moves)}", True, WHITE)
-                self.screen.blit(moves_text, (BOARD_SIZE + 20, WINDOW_HEIGHT - 40))
+                self.screen.blit(moves_text, (self.WINDOW_WIDTH - self.SIDEBAR_WIDTH + 20, self.WINDOW_HEIGHT - 40))
 
     def _draw_promotion_window(self) -> None:
         """Draw the promotion window with dynamic sizing."""
@@ -302,6 +346,7 @@ class ChessUI:
             y (int): Y-coordinate of the square.
             color (tuple): RGBA color for the highlight.
         """
+        self.highlight_surface = pygame.Surface((self.SQUARE_DRAW_SIZE, self.SQUARE_DRAW_SIZE), pygame.SRCALPHA)
         self.highlight_surface.fill(color)
         self.screen.blit(self.highlight_surface, (x, y))
 
@@ -311,11 +356,9 @@ class ChessUI:
         Args:
             piece (Pawn): The piece to move.
             target_square (Square): The target square to move the piece to.
-
-        Raises:
-            ValueError: If the move would put the king in check or results in checkmate.
         """
         try:
+            # Handle pawn promotion
             if isinstance(piece, Pawn):
                 last_row = 7 if piece.color == 'white' else 0
                 if target_square.row == last_row:
@@ -324,12 +367,36 @@ class ChessUI:
                     self.promotion_square = target_square
                     self.selected_square = None
                     self.valid_moves = []
+                    self.piece_already_selected = False
                     return
+
+            # Move the piece
             self.chessboard.move_piece(piece, target_square)
-            self.current_player = "black" if self.current_player == "white" else "white"
+
+            # Switch to next player
+            next_player = "black" if self.current_player == "white" else "white"
+            self.current_player = next_player
+
+            # --- CHECK FOR CHECKMATE ONLY IF KING IS IN CHECK ---
+            # Get the next player's king square
+            next_player_king_square = (
+                self.chessboard.white_king_square if next_player == "white"
+                else self.chessboard.black_king_square
+            )
+
+            # Only check for checkmate if the king is in check
+            if next_player_king_square and self.chessboard.is_check:
+                if self.chessboard.is_checkmate(next_player):
+                    self._show_game_over(f"Checkmate! {next_player} king is in checkmate.")
+                    return
+
+            # Reset selection
             self.selected_square = None
             self.valid_moves = []
+            self.piece_already_selected = False
+
         except ValueError as e:
+            # Handle other errors (e.g., invalid move)
             if "would put your king in check" in str(e):
                 self.king_in_check_blink = True
                 self.blink_counter = 0
@@ -384,7 +451,6 @@ class ChessUI:
                         square.piece != piece and  # Exclude the current piece
                         square.piece.__class__.__name__ == piece.__class__.__name__ and
                         square.piece.color == piece_color):
-                    # Update valid_moves to ensure they are current
                     square.piece.update_valid_moves(self.chessboard)
                     if end_square in square.piece.valid_moves:
                         ambiguous_pieces.append(square)
@@ -419,32 +485,31 @@ class ChessUI:
         return san_move
 
     def _select_square(self, row: int, col: int) -> bool:
-        """Select a square: if it's a valid piece, select it and show valid moves.
+        """Select a square if it's a valid piece of the current player.
 
         Args:
             row (int): Row of the selected square.
             col (int): Column of the selected square.
 
         Returns:
-            bool: True if the selection or move was successful, False otherwise.
+            bool: True if a piece is selected or a valid move is found, False otherwise.
         """
         if 0 <= row < 8 and 0 <= col < 8:
             square = self.chessboard.squares[row][col]
             piece = square.piece
 
+            # Select piece if it belongs to the current player
             if piece and piece.color == self.current_player:
                 self.selected_square = square
                 piece.update_valid_moves(self.chessboard)
                 self.valid_moves = piece.valid_moves
                 return True
 
+            # If a piece is already selected, check if the clicked square is a valid move
             elif self.selected_square:
                 for valid_square in self.valid_moves:
                     if valid_square.row == row and valid_square.col == col:
                         return True
-
-                self.selected_square = None
-                self.valid_moves = []
                 return False
 
         return False
@@ -455,12 +520,16 @@ class ChessUI:
         Args:
             pos (tuple[int, int]): Current mouse position (x, y).
         """
-        if self.selected_square:
+        if self.selected_square and self.drag_start_pos:
+            dx = abs(pos[0] - self.drag_start_pos[0])
+            dy = abs(pos[1] - self.drag_start_pos[1])
+            if dx >= DRAG_MOVE_THRESHOLD or dy >= DRAG_MOVE_THRESHOLD:
+                self.dragging = True
+
+        if self.dragging and self.selected_square:
             self.drag_current_pos = pos
-            self.dragging = True
 
         self.flip_board_button.check_hover(pos)
-
         for button in self.menu_manager.buttons.values():
             button.check_hover(pos)
 
@@ -476,87 +545,165 @@ class ChessUI:
             self.board_flipped = not self.board_flipped
             return
 
+        # Check menu buttons
         for button in self.menu_manager.buttons.values():
             button.check_hover(pos)
             if button.is_clicked(pos, pygame.event.Event(pygame.MOUSEBUTTONDOWN, {"pos": pos, "button": 1})):
                 self.menu_manager.handle_button_click(button.text)
                 return
 
+        # Check Upload UI if visible
+        if self.upload_ui.visible:
+            self.upload_ui.handle_click(pos)
+            return
+
         # Only process board clicks if interaction is enabled
         if not self.interaction_enabled:
             return
 
-        if pos[0] < BOARD_SIZE:
-            # Convert screen coords to board coords
+        # Check if the click is within the drawn board area (accounting for board_x, board_y, and BOARD_SIZE)
+        if (self.board_x <= pos[0] < self.board_x + self.BOARD_SIZE and
+                self.board_y <= pos[1] < self.board_y + self.BOARD_SIZE):
             row, col = self._get_board_coords(pos[0], pos[1])
-
             if self.promotion_window_active:
                 return
 
             if 0 <= row < 8 and 0 <= col < 8:
-                self._select_square(row, col)
+                # Only select if no piece is already selected (to avoid reselecting on 2nd click)
+                if not self.piece_already_selected:
+                    self._select_square(row, col)
                 if self.selected_square:
-                    self.drag_start_pos = pos  # Keep raw screen coords for drag
+                    self.drag_start_pos = pos
                     self.drag_current_pos = pos
                     self.dragging = False
 
     def handle_mouse_up(self, pos: tuple[int, int]) -> None:
-        """Handle mouse button up events.
+        """Handle mouse button up events for both drag & drop and click-click modes.
 
         Args:
             pos (tuple[int, int]): Mouse position (x, y) when button is released.
         """
-        if pos[0] >= BOARD_SIZE:
-            return
-
-        if not self.interaction_enabled:
-            return
-
-        # Convert screen coords to board coords
-        row, col = self._get_board_coords(pos[0], pos[1])
-
-        if self.promotion_window_active:
-            self._handle_promotion_click(pos)
-            return
-
-        if self.selected_square:
-            dx = abs(pos[0] - self.drag_start_pos[0]) if self.drag_start_pos else 0
-            dy = abs(pos[1] - self.drag_start_pos[1]) if self.drag_start_pos else 0
-            is_drag = dx >= DRAG_MOVE_THRESHOLD or dy >= DRAG_MOVE_THRESHOLD
-
-            if 0 <= row < 8 and 0 <= col < 8:
-                target_square = self.chessboard.squares[row][col]
-                for move in self.valid_moves:
-                    if move.row == row and move.col == col:
-                        if self.game_mode == "opening_training":
-                            move_san = self._get_move_san(self.selected_square, target_square)
-                            if not self.opening_trainer_ui.validate_player_move(move_san):
-                                expected_move = self.opening_trainer_ui.get_expected_move()
-                                error_msg = f"Invalid move: {move_san}. Expected move: {expected_move}"
-                                self.opening_trainer_ui.show_error(error_msg)
-                                self._restart_game()
-                                self.interaction_enabled = False
-                                return
-
-                            # Register player move in OpeningTrainer
-                            self.opening_trainer_ui.opening_trainer.play_player_move(move_san)
-
-                        # Play the move on the board
-                        self._move_piece_to_square(self.selected_square.piece, target_square)
-                        self.dragging = False
-                        self.drag_start_pos = None
-                        self.drag_current_pos = None
-
-                        if self.game_mode == "opening_training":
-                            self.opening_trainer_ui.play_next_bot_move()
-                        return
-
+        # Click outside the drawn board area (accounting for board_x, board_y, and BOARD_SIZE)
+        if (pos[0] < self.board_x or pos[0] >= self.board_x + self.BOARD_SIZE or
+                pos[1] < self.board_y or pos[1] >= self.board_y + self.BOARD_SIZE):
+            if self.selected_square:
                 self.selected_square = None
                 self.valid_moves = []
-
+                self.piece_already_selected = False
             self.dragging = False
             self.drag_start_pos = None
             self.drag_current_pos = None
+            return
+
+        if not self.interaction_enabled:
+            self.dragging = False
+            self.drag_start_pos = None
+            self.drag_current_pos = None
+            return
+
+        row, col = self._get_board_coords(pos[0], pos[1])
+        if self.promotion_window_active:
+            self._handle_promotion_click(pos)
+            self.dragging = False
+            self.drag_start_pos = None
+            self.drag_current_pos = None
+            return
+
+        # If no piece is selected, exit
+        if not self.selected_square:
+            self.dragging = False
+            self.drag_start_pos = None
+            self.drag_current_pos = None
+            self.piece_already_selected = False
+            return
+
+        # Calculate drag distance
+        dx = abs(pos[0] - self.drag_start_pos[0]) if self.drag_start_pos else 0
+        dy = abs(pos[1] - self.drag_start_pos[1]) if self.drag_start_pos else 0
+        is_drag = dx >= DRAG_MOVE_THRESHOLD or dy >= DRAG_MOVE_THRESHOLD
+
+        # Invalid coordinates -> deselect
+        if not (0 <= row < 8 and 0 <= col < 8):
+            self.selected_square = None
+            self.valid_moves = []
+            self.piece_already_selected = False
+            self.dragging = False
+            self.drag_start_pos = None
+            self.drag_current_pos = None
+            return
+
+        target_square = self.chessboard.squares[row][col]
+
+        # --- DRAG & DROP MODE ---
+        if is_drag:
+            move_found = False
+            for move in self.valid_moves:
+                if move.row == row and move.col == col:
+                    if self.game_mode == "opening_training":
+                        move_san = self._get_move_san(self.selected_square, target_square)
+                        if not self.opening_trainer_ui.validate_player_move(move_san):
+                            expected_move = self.opening_trainer_ui.get_expected_move()
+                            error_msg = f"Invalid move: {move_san}. Expected move: {expected_move}"
+                            self.opening_trainer_ui.show_error(error_msg)
+                            self._restart_game()
+                            self.interaction_enabled = False
+                            return
+                        self.opening_trainer_ui.opening_trainer.play_player_move(move_san)
+                    self._move_piece_to_square(self.selected_square.piece, target_square)
+                    if self.game_mode == "opening_training":
+                        self.opening_trainer_ui.play_next_bot_move()
+                    move_found = True
+                    break
+            if not move_found:
+                self.selected_square = None
+                self.valid_moves = []
+                self.piece_already_selected = False
+
+        # --- CLICK-CLICK MODE ---
+        else:
+            # If clicking the selected piece itself -> deselect ONLY on 2nd click
+            if self.selected_square == target_square:
+                if self.piece_already_selected:
+                    self.selected_square = None
+                    self.valid_moves = []
+                    self.piece_already_selected = False
+                else:
+                    self.piece_already_selected = True
+                self.dragging = False
+                self.drag_start_pos = None
+                self.drag_current_pos = None
+                return
+
+            # Check if it's a valid move
+            move_found = False
+            for move in self.valid_moves:
+                if move.row == row and move.col == col:
+                    if self.game_mode == "opening_training":
+                        move_san = self._get_move_san(self.selected_square, target_square)
+                        if not self.opening_trainer_ui.validate_player_move(move_san):
+                            expected_move = self.opening_trainer_ui.get_expected_move()
+                            error_msg = f"Invalid move: {move_san}. Expected move: {expected_move}"
+                            self.opening_trainer_ui.show_error(error_msg)
+                            self._restart_game()
+                            self.interaction_enabled = False
+                            return
+                        self.opening_trainer_ui.opening_trainer.play_player_move(move_san)
+                    self._move_piece_to_square(self.selected_square.piece, target_square)
+                    if self.game_mode == "opening_training":
+                        self.opening_trainer_ui.play_next_bot_move()
+                    move_found = True
+                    break
+
+            # If not a valid move -> deselect
+            if not move_found:
+                self.selected_square = None
+                self.valid_moves = []
+                self.piece_already_selected = False
+
+        # Reset drag state
+        self.dragging = False
+        self.drag_start_pos = None
+        self.drag_current_pos = None
 
     def _handle_promotion_click(self, pos: tuple[int, int]) -> None:
         """Handle click events in the promotion window.
@@ -599,45 +746,72 @@ class ChessUI:
         self.promotion_square = None
         self.selected_square = None
         self.valid_moves = []
+        self.piece_already_selected = False
 
     def _show_game_over(self, message: str) -> None:
-        """Display a game over screen with the given message.
+        """Display a game over screen with restart and quit buttons.
 
         Args:
-            message (str): The message to display.
+            message (str): The message to display (e.g., "Checkmate! black king is in checkmate.").
         """
-        overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+        # Create a semi-transparent overlay
+        overlay = pygame.Surface((self.WINDOW_WIDTH, self.WINDOW_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 180))
         self.screen.blit(overlay, (0, 0))
 
-        font = pygame.font.SysFont("Arial", 48)
-        text = font.render(message, True, (255, 255, 255))
-        text_rect = text.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 50))
-
+        # Display game over title
         title_font = pygame.font.SysFont("Arial", 72, bold=True)
         title = title_font.render("GAME OVER", True, (255, 0, 0))
-        title_rect = title.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 - 120))
-
-        restart_font = pygame.font.SysFont("Arial", 24)
-        restart_text = restart_font.render("Press R to restart or Q to quit", True, (255, 255, 255))
-        restart_rect = restart_text.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2 + 50))
-
+        title_rect = title.get_rect(center=(self.WINDOW_WIDTH // 2, self.WINDOW_HEIGHT // 2 - 150))
         self.screen.blit(title, title_rect)
+
+        # Display the checkmate message
+        font = pygame.font.SysFont("Arial", 48)
+        text = font.render(message, True, (255, 255, 255))
+        text_rect = text.get_rect(center=(self.WINDOW_WIDTH // 2, self.WINDOW_HEIGHT // 2 - 80))
         self.screen.blit(text, text_rect)
-        self.screen.blit(restart_text, restart_rect)
+
+        # Create restart and quit buttons
+        restart_button = Button(
+            x=self.WINDOW_WIDTH // 2 - 100,
+            y=self.WINDOW_HEIGHT // 2 + 20,
+            width=200,
+            height=50,
+            text="Restart Game"
+        )
+        quit_button = Button(
+            x=self.WINDOW_WIDTH // 2 - 100,
+            y=self.WINDOW_HEIGHT // 2 + 90,
+            width=200,
+            height=50,
+            text="Quit"
+        )
+
+        # Draw buttons
+        restart_button.draw(self.screen)
+        quit_button.draw(self.screen)
+
         pygame.display.flip()
 
+        # Wait for user input (button click or keyboard)
         waiting = True
         while waiting:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_r:
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    if restart_button.is_clicked(event.pos, event):
                         self._restart_game()
                         waiting = False
-                    elif event.key == pygame.K_q:
+                    elif quit_button.is_clicked(event.pos, event):
+                        pygame.quit()
+                        sys.exit()
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_r:  # Restart with R key
+                        self._restart_game()
+                        waiting = False
+                    elif event.key == pygame.K_q:  # Quit with Q key
                         pygame.quit()
                         sys.exit()
 
@@ -669,6 +843,7 @@ class ChessUI:
         self.dragging = False
         self.drag_start_pos = None
         self.drag_current_pos = None
+        self.piece_already_selected = False
 
     def run(self) -> None:
         """Run the main game loop."""
@@ -693,6 +868,8 @@ class ChessUI:
                         self._restart_game()
                     elif event.key == pygame.K_q:
                         running = False
+                elif event.type == pygame.DROPFILE:
+                    self.menu_manager.handle_event(event)
 
             if self.king_in_check_blink:
                 self.blink_counter += 1

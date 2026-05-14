@@ -9,14 +9,24 @@ pygame.init()
 screen_info = pygame.display.Info()
 screen_height = screen_info.current_h
 
-# Chess board dimensions (80% of screen height)
-BOARD_SIZE = int(0.9 * screen_height)  # Total board size (8x8 squares)
+# Window dimensions (90% of screen height)
+WINDOW_HEIGHT = int(0.9 * screen_height)
+WINDOW_WIDTH = int(0.9 * screen_height + 0.4 * screen_height)
+
+# Chess board dimensions (90% of window height)
+BOARD_SIZE = int(0.9 * WINDOW_HEIGHT)  # Total board size (8x8 squares)
 SQUARE_SIZE = BOARD_SIZE // 8  # Size of a single square (BOARD_SIZE / 8)
+
+# --- BOARD DRAWING DIMENSIONS (scaled down from BOARD_SIZE) ---
+# Use the full BOARD_SIZE for the drawn board to match the background image
+BOARD_SCALE = 0.95  # Adjust this to fit the background (e.g., 0.7 to 1.0)
+BOARD_DRAW_SIZE = int(BOARD_SCALE * BOARD_SIZE)  # Scaled size of the drawn board
+SQUARE_DRAW_SIZE = BOARD_DRAW_SIZE // 8  # Scaled size of a single square
+BOARD_DRAW_X = (BOARD_SIZE - BOARD_DRAW_SIZE) // 2  # Center the drawn board on the background
+BOARD_DRAW_Y = (BOARD_SIZE - BOARD_DRAW_SIZE) // 2  # Center vertically
 
 # Sidebar dimensions (40% of screen height)
 SIDEBAR_WIDTH = int(0.4 * screen_height)
-WINDOW_WIDTH = BOARD_SIZE + SIDEBAR_WIDTH
-WINDOW_HEIGHT = BOARD_SIZE
 
 # Promotion window dimensions (proportional to SQUARE_SIZE)
 PROMOTION_WINDOW_SIZE = int(BOARD_SIZE * 0.5)  # 50% of board size
@@ -28,12 +38,17 @@ PROMOTION_PIECES = ["Queen", "Rook", "Bishop", "Knight"]  # Order for promotion 
 DRAG_MOVE_THRESHOLD = 5  # Minimum pixels moved to consider it a drag
 
 # --- COLORS ---
+
+# Window Colors
+BACKGROUND_COLOR = (88, 88, 88)
+
 # Chess board colors
 LIGHT_SQUARE = (240, 217, 181)  # Light brown for chess board
 DARK_SQUARE = (181, 136, 99)    # Dark brown for chess board
 HIGHLIGHT = (247, 247, 105, 128)  # Semi-transparent yellow for valid moves
 SELECTED = (0, 255, 0, 128)      # Semi-transparent light green for selected piece
 CAPTURE = (255, 0, 0, 128)       # Semi-transparent light red for capture moves
+
 
 # Text and background colors
 BLACK = (0, 0, 0)                # Black color for text
@@ -53,7 +68,7 @@ BUTTON_ICON_PADDING = 10          # Space between icon and text
 # --- BUTTON POSITIONS ---
 # Menu buttons dimensions and positions
 MENU_BUTTON_WIDTH = SIDEBAR_WIDTH // 2  # Buttons width = half of sidebar width
-MENU_BUTTON_X = BOARD_SIZE + (SIDEBAR_WIDTH - MENU_BUTTON_WIDTH) // 2  # Centered in sidebar
+MENU_BUTTON_X = (WINDOW_WIDTH - SIDEBAR_WIDTH) + (SIDEBAR_WIDTH - MENU_BUTTON_WIDTH) // 2  # Centered in sidebar
 MENU_BUTTON_START_Y = 200  # Starting Y position for menu buttons
 
 # Back button dimensions
@@ -62,7 +77,7 @@ BACK_BUTTON_HEIGHT = 40  # Square height for Back button
 
 # Flip Board button dimensions and position
 FLIP_BUTTON_SIZE = 40  # Square size for Flip Board button
-FLIP_BUTTON_X = BOARD_SIZE + FLIP_BUTTON_SIZE - 20  # Right-aligned in sidebar
+FLIP_BUTTON_X = WINDOW_WIDTH - SIDEBAR_WIDTH + FLIP_BUTTON_SIZE*0.5 # Right-aligned in sidebar
 FLIP_BUTTON_Y = 20  # Top margin for Flip Board button
 FLIP_BUTTON_ICON_PATH = "assets/icons/flip_board_icon.png"  # Use Unicode icon instead of image
 
@@ -86,15 +101,12 @@ MENU_TREE = {
             "Stockfish": None
         }
     },
-    "Training": {
-        "Opening Trainer": {
+    "Opening Trainer": {
             "Random Opening": None,
-            "Choose Opening": None  # PGN files will be loaded dynamically
+            "Choose Opening": None,  # PGN files will be loaded dynamically
+            "Upload": None
         },
         "Analysis": {
-            "Import ScreenShot": None,
-            "Import PGN": None,
-            "Import FEN": None
+            "Upload": None
         },
-    }
 }
